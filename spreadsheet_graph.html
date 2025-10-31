@@ -1,0 +1,1658 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Connections</title>
+    
+    <script type="text/javascript" src="vis-network.min.js"></script>
+    <link href="vis-network.min.css" rel="stylesheet" type="text/css" />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style type="text/css">
+        html, body {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #f4f4f4;
+        }
+        #graph-container {
+            width: 100%;
+            height: 100vh;
+            border: 1px solid lightgray;
+            background-color: #ffffff;
+        }
+        .header-controls {
+            position: absolute;
+            top: 10px;
+            left: 20px;
+            z-index: 10;
+            margin: 0;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .header-controls h1 {
+            font-size: 1.5em;
+            font-weight: 700;
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .control-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .control-bar button {
+            font-family: 'Roboto', sans-serif;
+            font-size: 14px;
+            padding: 5px 10px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            border-radius: 5px;
+            background-color: #f0f0f0;
+            font-weight: 700;
+        }
+        .control-bar button:hover {
+            background-color: #e0e0e0;
+        }
+        
+        #help-box {
+            display: block;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+            font-size: 13px;
+            line-height: 1.6;
+            max-width: 450px;
+        }
+        #help-box h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.1em;
+            font-weight: 700;
+        }
+        .legend {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-shape {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border: 1px solid #555;
+            flex-shrink: 0;
+        }
+        .legend-box {
+            background-color: #FFFFE0;
+            border-color: #FFA500;
+        }
+        .legend-ellipse {
+            background-color: #D2E5FF;
+            border-color: #2B7CE9;
+            border-radius: 50%;
+        }
+        .legend-unknown {
+            background-color: #E0E0E0;
+            border-color: #888888;
+        }
+        
+        #error-message {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #fff8e1;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 24px;
+            width: 80%;
+            max-width: 600px;
+            text-align: left;
+            font-size: 1.1em;
+            line-height: 1.6;
+            color: #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        #error-message strong {
+            color: #c53929;
+            font-size: 1.2em;
+            display: block;
+            margin-bottom: 12px;
+        }
+        #error-message ul {
+            margin-top: 10px;
+            padding-left: 20px;
+        }
+        
+        .vis-tooltip {
+            position: absolute;
+            visibility: hidden;
+            padding: 8px;
+            background-color: #f5f5ff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            color: #333;
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 13px;
+            line-height: 1.5;
+            max-width: 400px;
+            -webkit-user-select: text; 
+            -moz-user-select: text;
+            -ms-user-select: text;
+            user-select: text;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="graph-container"></div>
+    
+    <div class="header-controls">
+        <h1>Data Connections</h1>
+        <div class="control-bar">
+            <button id="toggle-help">[ Hide Help ]</button>
+            <button id="zoom-in" title="Zoom In">+</button>
+            <button id="zoom-out" title="Zoom Out">-</button>
+            <button id="download-csv" title="Download spreadsheet_report.csv">Download Data</button>
+        </div>
+        <div id="help-box">
+            <h3>How to read this graph:</h3>
+            <div class="legend">
+                <div class="legend-shape legend-box"></div>
+                <span><b>File Node:</b> A Google Sheet. Click to open.</span>
+            </div>
+            <div class="legend">
+                <div class="legend-shape legend-ellipse"></div>
+                <span><b>Tab Node:</b> A tab within a sheet.</span>
+            </div>
+            <div class="legend">
+                <div class="legend-shape legend-unknown"></div>
+                <span><b>Unknown Source:</b> An imported file that could not be found or accessed.</span>
+            </div>
+            <br>
+            <ul>
+                <li><b>Dashed Lines:</b> Show which tabs "belong" to which file.</li>
+                <li><b>Solid Arrows:</b> Show data flow. An arrow from a source (Tab A) to a destination (Tab B) means Tab B imports data from Tab A.</li>
+                <li><b>Hover:</b> Hover over any node to see details.</li>
+                <li><b>Move:</b> Click and drag nodes (or the background) to reposition.</li>
+                <li><b>Zoom:</b> Use the <b>+</b> / <b>-</b> buttons or your scroll wheel to zoom.</li>
+                <li><b>Download:</b> Use the "Download Data" button to get the raw CSV data used for this graph.</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="vis-tooltip"></div>
+
+    <div id="error-message">
+        <strong>Error: Could not load visualization library</strong>
+        <p>The interactive graph library (<code>vis</code>) failed to load. Please ensure that the files:</p>
+        <ul>
+            <li><code>vis-network.min.js</code></li>
+            <li><code>vis-network.min.css</code></li>
+        </ul>
+        <p>...are located in the same directory as this <code>spreadsheet_graph.html</code> file.</p>
+    </div>
+    
+    <script type="text/javascript">
+        if (typeof vis === 'undefined') {
+            var graphContainer = document.getElementById('graph-container');
+            var errorMessage = document.getElementById('error-message');
+            if (graphContainer) graphContainer.style.display = 'none';
+            if (errorMessage) errorMessage.style.display = 'block';
+        } else {
+            // Embed the data from Python
+            var nodes = new vis.DataSet([
+  {
+    "id": "2025 - Master Plan - Forecast",
+    "label": "2025 - Master Plan - Forecast",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Forecast<br><br><b>Tabs with Data:</b><br>Foreast with Computations<br>Forecast<br>Imported - OpenAir All Users<br>Imported - Scheduled Exceptions-Only PTO<br>Months<br>To be deleted - Data",
+    "shape": "box",
+    "color": {
+      "border": "#FFA500",
+      "background": "#FFFFE0"
+    },
+    "url": "https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/",
+    "cursor": "pointer",
+    "font": {
+      "face": "Roboto",
+      "size": 20,
+      "bold": true
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Forecast::Foreast with Computations",
+    "label": "Foreast with Computations",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Forecast<br><b>Tab:</b> Foreast with Computations<br><br><b>Formulas (Column | Type):</b><br>Stage | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Forecast::Forecast",
+    "label": "Forecast",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Forecast<br><b>Tab:</b> Forecast<br>(No formulas found in rows 1-2, but tab is part of file)",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Forecast::Imported - OpenAir All Users",
+    "label": "Imported - OpenAir All Users",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Forecast<br><b>Tab:</b> Imported - OpenAir All Users<br><br><b>Formulas (Column | Type):</b><br>BUSS Member? | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Forecast::Imported - Scheduled Exceptions-Only PTO",
+    "label": "Imported - Scheduled Exceptions-Only PTO",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Forecast<br><b>Tab:</b> Imported - Scheduled Exceptions-Only PTO<br><br><b>Formulas (Column | Type):</b><br>User - User ID | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Forecast::Months",
+    "label": "Months",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Forecast<br><b>Tab:</b> Months<br><br><b>Formulas (Column | Type):</b><br>Month | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Forecast::To be deleted - Data",
+    "label": "To be deleted - Data",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Forecast<br><b>Tab:</b> To be deleted - Data<br><br><b>Formulas (Column | Type):</b><br>Department - default for the person | Lookup<br>Target Rate for Role\n\nNote: Rate is $0 if client is OE. | Lookup<br>Total hours for the role for Revenue Computation\n\n | Computation<br>targetRevenue | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Reports",
+    "label": "2025 - Master Plan - Reports",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Reports<br><br><b>Tabs with Data:</b><br>BUSS Charts<br>BUSS Metrics<br>Imported - Actual Revenue from QuickBooks<br>Imported - Invoices-Costs OpenAir<br>Practice Level Metrics<br>Project Metrics<br>Projected Allocation<br>Projects - Projected vs Actual - Detail View",
+    "shape": "box",
+    "color": {
+      "border": "#FFA500",
+      "background": "#FFFFE0"
+    },
+    "url": "https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/",
+    "cursor": "pointer",
+    "font": {
+      "face": "Roboto",
+      "size": 20,
+      "bold": true
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Reports::BUSS Charts",
+    "label": "BUSS Charts",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Reports<br><b>Tab:</b> BUSS Charts<br><br><b>Formulas (Column | Type):</b><br>April | Computation<br>August | Computation<br>December | Computation<br>February | Computation<br>January | Computation<br>July | Computation<br>June | Computation<br>March | Computation<br>May | Computation<br>November | Computation<br>October | Computation<br>September | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Reports::BUSS Metrics",
+    "label": "BUSS Metrics",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Reports<br><b>Tab:</b> BUSS Metrics<br><br><b>Formulas (Column | Type):</b><br>BU | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Reports::Imported - Actual Revenue from QuickBooks",
+    "label": "Imported - Actual Revenue from QuickBooks",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Reports<br><b>Tab:</b> Imported - Actual Revenue from QuickBooks<br><br><b>Formulas (Column | Type):</b><br>Client covered in Master Plan? | Lookup<br>Client | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Reports::Imported - Invoices-Costs OpenAir",
+    "label": "Imported - Invoices-Costs OpenAir",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Reports<br><b>Tab:</b> Imported - Invoices-Costs OpenAir<br><br><b>Formulas (Column | Type):</b><br>Is the Project listed in Forecast? | Lookup<br>Month | Computation<br>\ufeffDate | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Reports::Practice Level Metrics",
+    "label": "Practice Level Metrics",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Reports<br><b>Tab:</b> Practice Level Metrics<br><br><b>Formulas (Column | Type):</b><br>Apr | Lookup<br>Aug | Lookup<br>Dec | Lookup<br>Department - Metric | Computation<br>Feb | Lookup<br>Jan | Lookup<br>Jul | Lookup<br>Jun | Lookup<br>Mar | Lookup<br>May | Lookup<br>Nov | Lookup<br>Oct | Lookup<br>Sep | Lookup",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Reports::Project Metrics",
+    "label": "Project Metrics",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Reports<br><b>Tab:</b> Project Metrics<br><br><b>Formulas (Column | Type):</b><br>Sales Stage | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Reports::Projected Allocation",
+    "label": "Projected Allocation",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Reports<br><b>Tab:</b> Projected Allocation<br><br><b>Formulas (Column | Type):</b><br>Department | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 - Master Plan - Reports::Projects - Projected vs Actual - Detail View",
+    "label": "Projects - Projected vs Actual - Detail View",
+    "tooltipHTML": "<b>File:</b> 2025 - Master Plan - Reports<br><b>Tab:</b> Projects - Projected vs Actual - Detail View<br><br><b>Formulas (Column | Type):</b><br>Actual COGS | Computation<br>Actual Gross Profit | Computation<br>Actual Revenue | Computation<br>Business Unit | Lookup<br>COGS Difference (+ value is GOOD) | Computation<br>Client | Lookup<br>Gross Profit Difference\n(+ value is GOOD) | Computation<br>Month Raw | Computation<br>Project | Lookup<br>Projected Gross Profit | Computation<br>Revenue Difference\n (+ value is GOOD) | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 Months and Holidays",
+    "label": "2025 Months and Holidays",
+    "tooltipHTML": "<b>File:</b> 2025 Months and Holidays<br><br><b>Tabs with Data:</b><br>Data",
+    "shape": "box",
+    "color": {
+      "border": "#FFA500",
+      "background": "#FFFFE0"
+    },
+    "url": "https://docs.google.com/spreadsheets/d/1uLQ-1Nzhaksfg2j6kqVTVtAZhJeoQZL_rbJ0VVdtnEY/",
+    "cursor": "pointer",
+    "font": {
+      "face": "Roboto",
+      "size": 20,
+      "bold": true
+    }
+  },
+  {
+    "id": "2025 Months and Holidays::Data",
+    "label": "Data",
+    "tooltipHTML": "<b>File:</b> 2025 Months and Holidays<br><b>Tab:</b> Data<br><br><b>Formulas (Column | Type):</b><br>BR | Computation<br>IN | Computation<br>Number of WeekDay Hours (ignoring holidays) | Computation<br>US | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 OpenAir  - Client Projects Hours and Invoices",
+    "label": "2025 OpenAir  - Client Projects Hours and Invoices",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir  - Client Projects Hours and Invoices<br><br><b>Tabs with Data:</b><br>Data - Hours<br>Data - Invoices<br>Data - Project Hours",
+    "shape": "box",
+    "color": {
+      "border": "#FFA500",
+      "background": "#FFFFE0"
+    },
+    "url": "https://docs.google.com/spreadsheets/d/1L8UujKQ-6eZmnmoqFIPKARVjQMDIQGrMinR4hwpB1js/",
+    "cursor": "pointer",
+    "font": {
+      "face": "Roboto",
+      "size": 20,
+      "bold": true
+    }
+  },
+  {
+    "id": "2025 OpenAir  - Client Projects Hours and Invoices::Data - Hours",
+    "label": "Data - Hours",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir  - Client Projects Hours and Invoices<br><b>Tab:</b> Data - Hours<br>(No formulas found in rows 1-2, but tab is part of file)",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 OpenAir  - Client Projects Hours and Invoices::Data - Invoices",
+    "label": "Data - Invoices",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir  - Client Projects Hours and Invoices<br><b>Tab:</b> Data - Invoices<br>(No formulas found in rows 1-2, but tab is part of file)",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 OpenAir  - Client Projects Hours and Invoices::Data - Project Hours",
+    "label": "Data - Project Hours",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir  - Client Projects Hours and Invoices<br><b>Tab:</b> Data - Project Hours<br><br><b>Formulas (Column | Type):</b><br>Business Unit | Lookup",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 OpenAir - All Users",
+    "label": "2025 OpenAir - All Users",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir - All Users<br><br><b>Tabs with Data:</b><br>Data<br>Imported - Membership Override<br>Imported - Months<br>Imported - Time Off Hours<br>Raw Data",
+    "shape": "box",
+    "color": {
+      "border": "#FFA500",
+      "background": "#FFFFE0"
+    },
+    "url": "https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/",
+    "cursor": "pointer",
+    "font": {
+      "face": "Roboto",
+      "size": 20,
+      "bold": true
+    }
+  },
+  {
+    "id": "2025 OpenAir - All Users::Data",
+    "label": "Data",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir - All Users<br><b>Tab:</b> Data<br><br><b>Formulas (Column | Type):</b><br>Apr | Lookup<br>Aug | Lookup<br>BUSS Member? | Lookup<br>Business Unit | Lookup<br>Dec | Lookup<br>Feb - Time Off Hours | Lookup<br>Feb | Lookup<br>Jan - Time Off Hours | Lookup<br>Jan | Lookup<br>Job code | Lookup<br>Jul | Lookup<br>Jun | Lookup<br>Mar - Time Off Hours | Lookup<br>Mar | Lookup<br>May | Lookup<br>Nov | Lookup<br>Oct | Lookup<br>Sep | Lookup",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 OpenAir - All Users::Imported - Membership Override",
+    "label": "Imported - Membership Override",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir - All Users<br><b>Tab:</b> Imported - Membership Override<br><br><b>Formulas (Column | Type):</b><br>User ID | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 OpenAir - All Users::Imported - Months",
+    "label": "Imported - Months",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir - All Users<br><b>Tab:</b> Imported - Months<br><br><b>Formulas (Column | Type):</b><br>Month | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 OpenAir - All Users::Imported - Time Off Hours",
+    "label": "Imported - Time Off Hours",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir - All Users<br><b>Tab:</b> Imported - Time Off Hours<br><br><b>Formulas (Column | Type):</b><br>User ID | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 OpenAir - All Users::Raw Data",
+    "label": "Raw Data",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir - All Users<br><b>Tab:</b> Raw Data<br><br><b>Formulas (Column | Type):</b><br>BUSS Member? | Lookup<br>Department | Import<br>Offboarded in Current Year? | Computation<br>Relevant for Planning? | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 OpenAir Approved Time Off Request Hours",
+    "label": "2025 OpenAir Approved Time Off Request Hours",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir Approved Time Off Request Hours<br><br><b>Tabs with Data:</b><br>Data<br>Last Update",
+    "shape": "box",
+    "color": {
+      "border": "#FFA500",
+      "background": "#FFFFE0"
+    },
+    "url": "https://docs.google.com/spreadsheets/d/1hnUOoC8cUE2Egxwb5JrTM6HWXJVgId_zF8Ejiop-Vmo/",
+    "cursor": "pointer",
+    "font": {
+      "face": "Roboto",
+      "size": 20,
+      "bold": true
+    }
+  },
+  {
+    "id": "2025 OpenAir Approved Time Off Request Hours::Data",
+    "label": "Data",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir Approved Time Off Request Hours<br><b>Tab:</b> Data<br><br><b>Formulas (Column | Type):</b><br>User ID | Lookup",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 OpenAir Approved Time Off Request Hours::Last Update",
+    "label": "Last Update",
+    "tooltipHTML": "<b>File:</b> 2025 OpenAir Approved Time Off Request Hours<br><b>Tab:</b> Last Update<br><br><b>Formulas (Column | Type):</b><br>10/30/2025 12:05 AM (PT) | Lookup",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 QuickBooks Sales Data",
+    "label": "2025 QuickBooks Sales Data",
+    "tooltipHTML": "<b>File:</b> 2025 QuickBooks Sales Data<br><br><b>Tabs with Data:</b><br>Data<br>Staging Area Data",
+    "shape": "box",
+    "color": {
+      "border": "#FFA500",
+      "background": "#FFFFE0"
+    },
+    "url": "https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/",
+    "cursor": "pointer",
+    "font": {
+      "face": "Roboto",
+      "size": 20,
+      "bold": true
+    }
+  },
+  {
+    "id": "2025 QuickBooks Sales Data::Data",
+    "label": "Data",
+    "tooltipHTML": "<b>File:</b> 2025 QuickBooks Sales Data<br><b>Tab:</b> Data<br><br><b>Formulas (Column | Type):</b><br>April | Computation<br>August | Computation<br>Client | Lookup<br>December | Computation<br>February | Computation<br>January | Computation<br>July | Computation<br>June | Computation<br>March | Computation<br>May | Computation<br>November | Computation<br>October | Computation<br>September | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 QuickBooks Sales Data::Staging Area Data",
+    "label": "Staging Area Data",
+    "tooltipHTML": "<b>File:</b> 2025 QuickBooks Sales Data<br><b>Tab:</b> Staging Area Data<br><br><b>Formulas (Column | Type):</b><br>April | Lookup<br>August | Lookup<br>Client Name per Quickbooks | Computation<br>Client | Lookup<br>Column Name from Raw Data | Lookup<br>December | Lookup<br>February | Lookup<br>January | Lookup<br>July | Lookup<br>June | Lookup<br>March | Lookup<br>May | Lookup<br>November | Lookup<br>October | Lookup<br>September | Lookup",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "2025 Workforce Membership Overrides",
+    "label": "2025 Workforce Membership Overrides",
+    "tooltipHTML": "<b>File:</b> 2025 Workforce Membership Overrides<br><br><b>Tabs with Data:</b><br>Data",
+    "shape": "box",
+    "color": {
+      "border": "#FFA500",
+      "background": "#FFFFE0"
+    },
+    "url": "https://docs.google.com/spreadsheets/d/1kavhGel7Xi0YJn8xsajQ23pwV5HUs3ZaxytF0gsBUXo/",
+    "cursor": "pointer",
+    "font": {
+      "face": "Roboto",
+      "size": 20,
+      "bold": true
+    }
+  },
+  {
+    "id": "2025 Workforce Membership Overrides::Data",
+    "label": "Data",
+    "tooltipHTML": "<b>File:</b> 2025 Workforce Membership Overrides<br><b>Tab:</b> Data<br>(No formulas found in rows 1-2, but tab is part of file)",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner",
+    "label": "Computations - 2025 Master Planner",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><br><b>Tabs with Data:</b><br>Actuals - Project Hours and Costs<br>Actuals on Non-Billable Work<br>BUSS Metrics<br>Imported - Active BUSS Members<br>Imported - Actual Billable Hours<br>Imported - Invoices-Costs for BU OpenAir<br>Imported - Offboarded in Current Year<br>Imported - OpenAir All Users Relevant for Planning<br>Months<br>Over Allocations - Project View<br>Practice Level Metrics<br>Project Metrics<br>Projected Allocation<br>Revenue and Margin Computations",
+    "shape": "box",
+    "color": {
+      "border": "#FFA500",
+      "background": "#FFFFE0"
+    },
+    "url": "https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/",
+    "cursor": "pointer",
+    "font": {
+      "face": "Roboto",
+      "size": 20,
+      "bold": true
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Actuals - Project Hours and Costs",
+    "label": "Actuals - Project Hours and Costs",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Actuals - Project Hours and Costs<br><br><b>Formulas (Column | Type):</b><br>Average loaded cost per hour for the job code or the person\n\nSet to ZERO if job-code is SGA; else data picked from tab 'Reference - COGS Rate Card' | Lookup<br>Business Unit | Import<br>Cost | Computation<br>Job Code | Lookup<br>Month | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Actuals on Non-Billable Work",
+    "label": "Actuals on Non-Billable Work",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Actuals on Non-Billable Work<br><br><b>Formulas (Column | Type):</b><br>Apr - COGS on Non-billable Hours | Computation<br>Apr - Non-billable Hours | Lookup<br>Aug - COGS on Non-billable Hours | Computation<br>Aug - Non-billable Hours | Lookup<br>Average loaded cost per hour for the job code or the person\n\nSet to ZERO if job-code is SGA; else data picked from tab 'Reference - COGS Rate Card' | Lookup<br>Dec - Non-billable Hours | Lookup<br>Feb - COGS on Non-billable Hours | Computation<br>Feb - Non-billable Hours | Lookup<br>Jan - COGS on Non-billable Hours | Computation<br>Jan - Non-billable Hours | Lookup<br>Jul - COGS on Non-billable Hours | Computation<br>Jul - Non-billable Hours | Lookup<br>Jun - COGS on Non-billable Hours | Computation<br>Jun - Non-billable Hours | Lookup<br>Mar - COGS on Non-billable Hours | Computation<br>Mar - Non-billable Hours | Lookup<br>May - COGS on Non-billable Hours | Computation<br>May - Non-billable Hours | Lookup<br>Nov - Non-billable Hours | Lookup<br>Oct - Non-billable Hours | Lookup<br>Sep - COGS on Non-billable Hours | Computation<br>Sep - Non-billable Hours | Lookup<br>f | Lookup",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::BUSS Metrics",
+    "label": "BUSS Metrics",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> BUSS Metrics<br><br><b>Formulas (Column | Type):</b><br>Annual | Computation<br>Apr | Computation<br>Aug | Computation<br>Dec | Computation<br>Feb | Computation<br>Jan | Computation<br>Jul | Computation<br>Jun | Computation<br>Mar | Computation<br>May | Computation<br>Metric | Computation<br>Nov | Computation<br>Oct | Computation<br>Q1 | Computation<br>Q2 | Computation<br>Q3 | Computation<br>Q4 | Computation<br>Sep | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Imported - Active BUSS Members",
+    "label": "Imported - Active BUSS Members",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Imported - Active BUSS Members<br><br><b>Formulas (Column | Type):</b><br>BU | Lookup",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Imported - Actual Billable Hours",
+    "label": "Imported - Actual Billable Hours",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Imported - Actual Billable Hours<br><br><b>Formulas (Column | Type):</b><br>Date | Import<br>Month | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Imported - Invoices-Costs for BU OpenAir",
+    "label": "Imported - Invoices-Costs for BU OpenAir",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Imported - Invoices-Costs for BU OpenAir<br><br><b>Formulas (Column | Type):</b><br>Business Unit | Import<br>Cost | Computation<br>Month | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Imported - Offboarded in Current Year",
+    "label": "Imported - Offboarded in Current Year",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Imported - Offboarded in Current Year<br><br><b>Formulas (Column | Type):</b><br>BU | Lookup",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Imported - OpenAir All Users Relevant for Planning",
+    "label": "Imported - OpenAir All Users Relevant for Planning",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Imported - OpenAir All Users Relevant for Planning<br><br><b>Formulas (Column | Type):</b><br>BUSS Member? | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Months",
+    "label": "Months",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Months<br><br><b>Formulas (Column | Type):</b><br>Month | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Over Allocations - Project View",
+    "label": "Over Allocations - Project View",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Over Allocations - Project View<br><br><b>Formulas (Column | Type):</b><br>Over Allocation Hours - Apr | Lookup<br>Over Allocation Hours - Aug | Lookup<br>Over Allocation Hours - Feb | Lookup<br>Over Allocation Hours - Jan | Lookup<br>Over Allocation Hours - Jul | Lookup<br>Over Allocation Hours - Jun | Lookup<br>Over Allocation Hours - Mar | Lookup<br>Over Allocation Hours - May | Lookup<br>Over Allocation Hours - Oct | Lookup<br>Over Allocation Hours - Sep | Lookup<br>Project | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Practice Level Metrics",
+    "label": "Practice Level Metrics",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Practice Level Metrics<br><br><b>Formulas (Column | Type):</b><br>Apr | Lookup<br>Aug | Lookup<br>Dec | Lookup<br>Department - Metric | Computation<br>Feb | Lookup<br>Jan | Lookup<br>Jul | Lookup<br>Jun | Lookup<br>Mar | Lookup<br>May | Lookup<br>Nov | Lookup<br>Oct | Lookup<br>Sep | Lookup",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Project Metrics",
+    "label": "Project Metrics",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Project Metrics<br>(No formulas found in rows 1-2, but tab is part of file)",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Projected Allocation",
+    "label": "Projected Allocation",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Projected Allocation<br><br><b>Formulas (Column | Type):</b><br>Apr | Computation<br>Aug | Computation<br>BU | Lookup<br>Dec | Computation<br>Feb | Computation<br>Is the person appearing more than once here? | Computation<br>Is this a person who will be released when there is no revenue from the client?\n\n | Computation<br>Jan | Computation<br>Jul | Computation<br>Jun | Computation<br>Mar | Computation<br>May | Computation<br>Nov | Computation<br>Oct | Computation<br>Over Allocation Hours - Apr | Lookup<br>Over Allocation Hours - Aug | Lookup<br>Over Allocation Hours - Feb | Lookup<br>Over Allocation Hours - Jan | Lookup<br>Over Allocation Hours - Jul | Lookup<br>Over Allocation Hours - Jun | Lookup<br>Over Allocation Hours - Mar | Lookup<br>Over Allocation Hours - May | Lookup<br>Sep | Computation",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Computations - 2025 Master Planner::Revenue and Margin Computations",
+    "label": "Revenue and Margin Computations",
+    "tooltipHTML": "<b>File:</b> Computations - 2025 Master Planner<br><b>Tab:</b> Revenue and Margin Computations<br><br><b>Formulas (Column | Type):</b><br>Hours - Jan | Import<br>Known Rate for Role | Import<br>Sales Stage | Import",
+    "shape": "ellipse",
+    "color": {
+      "border": "#2B7CE9",
+      "background": "#D2E5FF"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 18,
+      "bold": false
+    }
+  },
+  {
+    "id": "Unknown Source",
+    "label": "Unknown Source",
+    "tooltipHTML": "<b>File:</b> Unknown Source<br>(The original file could not be found or was inaccessible)",
+    "shape": "box",
+    "color": {
+      "border": "#888888",
+      "background": "#E0E0E0"
+    },
+    "url": "",
+    "cursor": "default",
+    "font": {
+      "face": "Roboto",
+      "size": 20,
+      "bold": true
+    }
+  }
+]);
+            var edges = new vis.DataSet([
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Project Metrics",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Forecast",
+    "to": "2025 - Master Plan - Forecast::To be deleted - Data",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Forecast",
+    "to": "2025 - Master Plan - Forecast::Months",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner::Projected Allocation",
+    "to": "2025 - Master Plan - Reports::Projected Allocation",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "2025 OpenAir Approved Time Off Request Hours::Data",
+    "to": "2025 OpenAir - All Users::Imported - Time Off Hours",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "2025 Months and Holidays::Data",
+    "to": "Computations - 2025 Master Planner::Months",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "2025 Months and Holidays",
+    "to": "2025 Months and Holidays::Data",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 OpenAir  - Client Projects Hours and Invoices",
+    "to": "2025 OpenAir  - Client Projects Hours and Invoices::Data - Hours",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 QuickBooks Sales Data::Data",
+    "to": "2025 - Master Plan - Reports::Imported - Actual Revenue from QuickBooks",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "Unknown Source",
+    "to": "2025 OpenAir - All Users::Raw Data",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Imported - Actual Billable Hours",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Reports",
+    "to": "2025 - Master Plan - Reports::BUSS Metrics",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 OpenAir - All Users",
+    "to": "2025 OpenAir - All Users::Imported - Time Off Hours",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 OpenAir Approved Time Off Request Hours",
+    "to": "2025 OpenAir Approved Time Off Request Hours::Data",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Actuals - Project Hours and Costs",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Reports",
+    "to": "2025 - Master Plan - Reports::Imported - Invoices-Costs OpenAir",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Months",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Actuals on Non-Billable Work",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 OpenAir  - Client Projects Hours and Invoices::Data - Hours",
+    "to": "Computations - 2025 Master Planner::Imported - Actual Billable Hours",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "2025 OpenAir - All Users",
+    "to": "2025 OpenAir - All Users::Imported - Membership Override",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 OpenAir Approved Time Off Request Hours",
+    "to": "2025 OpenAir Approved Time Off Request Hours::Last Update",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 OpenAir - All Users::Data",
+    "to": "2025 - Master Plan - Forecast::Imported - OpenAir All Users",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "2025 - Master Plan - Forecast",
+    "to": "2025 - Master Plan - Forecast::Foreast with Computations",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Over Allocations - Project View",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 OpenAir  - Client Projects Hours and Invoices",
+    "to": "2025 OpenAir  - Client Projects Hours and Invoices::Data - Project Hours",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Forecast",
+    "to": "2025 - Master Plan - Forecast::Imported - OpenAir All Users",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::BUSS Metrics",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 Months and Holidays::Data",
+    "to": "2025 - Master Plan - Forecast::Months",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "2025 - Master Plan - Forecast",
+    "to": "2025 - Master Plan - Forecast::Imported - Scheduled Exceptions-Only PTO",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 OpenAir - All Users",
+    "to": "2025 OpenAir - All Users::Raw Data",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 OpenAir  - Client Projects Hours and Invoices::Data - Project Hours",
+    "to": "Computations - 2025 Master Planner::Actuals - Project Hours and Costs",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Imported - Offboarded in Current Year",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Forecast::Foreast with Computations",
+    "to": "Computations - 2025 Master Planner::Revenue and Margin Computations",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Imported - Invoices-Costs for BU OpenAir",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Practice Level Metrics",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Reports",
+    "to": "2025 - Master Plan - Reports::Projects - Projected vs Actual - Detail View",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 Workforce Membership Overrides::Data",
+    "to": "2025 OpenAir - All Users::Imported - Membership Override",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "Computations - 2025 Master Planner::Project Metrics",
+    "to": "2025 - Master Plan - Reports::Project Metrics",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "2025 OpenAir - All Users",
+    "to": "2025 OpenAir - All Users::Imported - Months",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner::BUSS Metrics",
+    "to": "2025 - Master Plan - Reports::BUSS Metrics",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "2025 Months and Holidays::Data",
+    "to": "2025 OpenAir - All Users::Imported - Months",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "Unknown Source",
+    "to": "2025 - Master Plan - Forecast::Imported - Scheduled Exceptions-Only PTO",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "2025 - Master Plan - Reports",
+    "to": "2025 - Master Plan - Reports::Practice Level Metrics",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Forecast::Forecast",
+    "to": "2025 - Master Plan - Forecast::Foreast with Computations",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Revenue and Margin Computations",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 QuickBooks Sales Data",
+    "to": "2025 QuickBooks Sales Data::Data",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Reports",
+    "to": "2025 - Master Plan - Reports::Project Metrics",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Reports",
+    "to": "2025 - Master Plan - Reports::BUSS Charts",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 QuickBooks Sales Data",
+    "to": "2025 QuickBooks Sales Data::Staging Area Data",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Forecast",
+    "to": "2025 - Master Plan - Forecast::Forecast",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Imported - Active BUSS Members",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Imported - OpenAir All Users Relevant for Planning",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner::Imported - Invoices-Costs for BU OpenAir",
+    "to": "2025 - Master Plan - Reports::Imported - Invoices-Costs OpenAir",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "2025 OpenAir  - Client Projects Hours and Invoices",
+    "to": "2025 OpenAir  - Client Projects Hours and Invoices::Data - Invoices",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Reports",
+    "to": "2025 - Master Plan - Reports::Projected Allocation",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 - Master Plan - Reports",
+    "to": "2025 - Master Plan - Reports::Imported - Actual Revenue from QuickBooks",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "Computations - 2025 Master Planner",
+    "to": "Computations - 2025 Master Planner::Projected Allocation",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 OpenAir - All Users",
+    "to": "2025 OpenAir - All Users::Data",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 Workforce Membership Overrides",
+    "to": "2025 Workforce Membership Overrides::Data",
+    "arrows": "none",
+    "color": "#E0E0E0",
+    "dashes": true
+  },
+  {
+    "from": "2025 OpenAir  - Client Projects Hours and Invoices::Data - Invoices",
+    "to": "Computations - 2025 Master Planner::Imported - Invoices-Costs for BU OpenAir",
+    "arrows": "to",
+    "color": "#848484"
+  },
+  {
+    "from": "2025 OpenAir - All Users::Data",
+    "to": "Computations - 2025 Master Planner::Imported - OpenAir All Users Relevant for Planning",
+    "arrows": "to",
+    "color": "#848484"
+  }
+]);
+            var csvDataToEmbed = "Source file name,Source file URL,Tab name,Column name,Formula found in row#1,Type of formula (row 1),Imported file URL (row 1),Imported file name (row 1),Imported tab name (row 1),Formula found in row#2,Type of formula (row 2),Imported file URL (row 2),Imported file name (row 2),Imported tab name (row 2)\n2025 OpenAir Approved Time Off Request Hours,https://docs.google.com/spreadsheets/d/1hnUOoC8cUE2Egxwb5JrTM6HWXJVgId_zF8Ejiop-Vmo/,Last Update,10/30/2025 12:05 AM (PT),\"=CONCAT(SUBSTITUTE(INDEX(RawData!A:A,MATCH(\"\"zzzz\"\",RawData!A:A)), \"\"Generated on: \"\", \"\"\"\"), \"\" (PT)\"\")\",Lookup,,,,,,,,\n2025 OpenAir Approved Time Off Request Hours,https://docs.google.com/spreadsheets/d/1hnUOoC8cUE2Egxwb5JrTM6HWXJVgId_zF8Ejiop-Vmo/,Data,User ID,,,,,,\"=SORT(QUERY(RawData!$B$3:$N, \"\"SELECT * WHERE B IS NOT NULL AND B <> ' '\"\"), 1, TRUE)\",Lookup,,,\n2025 OpenAir  - Client Projects Hours and Invoices,https://docs.google.com/spreadsheets/d/1L8UujKQ-6eZmnmoqFIPKARVjQMDIQGrMinR4hwpB1js/,Data - Project Hours,Business Unit,\"=filter({RawData!D:D,RawData!A:A,RawData!E:E,RawData!G:G,RawData!H:H},RawData!H:H <> 0)\",Lookup,,,,,,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,BUSS Member?,,,,,,\"=Filter('Raw Data'!A:C,'Raw Data'!C:C = \"\"Yes\"\")\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Business Unit,,,,,,\"=ifna(vlookup(AV2,Departments!A:C,3,false),\"\"Unknown\"\")\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Job code,,,,,,\"=Filter('Raw Data'!E:K,'Raw Data'!C:C = \"\"Yes\"\")\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Jan,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(L$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(L$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(L$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(L$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(L$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(L$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(L$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(L$1,'Imported - Months'!$A:$C,3,false)-vlookup(L$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(L$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(L$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(L$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(L$1,'Imported - Months'!$A:$C,3,false)-vlookup(L$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(L$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(L$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(L$1,'Imported - Months'!$A:$C,2,false))/(vlookup(L$1,'Imported - Months'!$A:$C,3,false)-vlookup(L$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Feb,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(M$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(M$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(M$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(M$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(M$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(M$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(M$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(M$1,'Imported - Months'!$A:$C,3,false)-vlookup(M$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(M$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(M$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(M$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(M$1,'Imported - Months'!$A:$C,3,false)-vlookup(M$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(M$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(M$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(M$1,'Imported - Months'!$A:$C,2,false))/(vlookup(M$1,'Imported - Months'!$A:$C,3,false)-vlookup(M$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Mar,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(N$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(N$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(N$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(N$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(N$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(N$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(N$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(N$1,'Imported - Months'!$A:$C,3,false)-vlookup(N$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(N$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(N$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(N$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(N$1,'Imported - Months'!$A:$C,3,false)-vlookup(N$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(N$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(N$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(N$1,'Imported - Months'!$A:$C,2,false))/(vlookup(N$1,'Imported - Months'!$A:$C,3,false)-vlookup(N$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Apr,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(O$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(O$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(O$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(O$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(O$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(O$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(O$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(O$1,'Imported - Months'!$A:$C,3,false)-vlookup(O$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(O$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(O$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(O$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(O$1,'Imported - Months'!$A:$C,3,false)-vlookup(O$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(O$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(O$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(O$1,'Imported - Months'!$A:$C,2,false))/(vlookup(O$1,'Imported - Months'!$A:$C,3,false)-vlookup(O$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,May,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(P$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(P$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(P$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(P$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(P$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(P$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(P$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(P$1,'Imported - Months'!$A:$C,3,false)-vlookup(P$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(P$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(P$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(P$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(P$1,'Imported - Months'!$A:$C,3,false)-vlookup(P$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(P$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(P$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(P$1,'Imported - Months'!$A:$C,2,false))/(vlookup(P$1,'Imported - Months'!$A:$C,3,false)-vlookup(P$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Jun,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(Q$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(Q$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(Q$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(Q$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(Q$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(Q$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(Q$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(Q$1,'Imported - Months'!$A:$C,3,false)-vlookup(Q$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(Q$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(Q$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(Q$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(Q$1,'Imported - Months'!$A:$C,3,false)-vlookup(Q$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(Q$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(Q$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(Q$1,'Imported - Months'!$A:$C,2,false))/(vlookup(Q$1,'Imported - Months'!$A:$C,3,false)-vlookup(Q$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Jul,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(R$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(R$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(R$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(R$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(R$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(R$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(R$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(R$1,'Imported - Months'!$A:$C,3,false)-vlookup(R$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(R$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(R$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(R$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(R$1,'Imported - Months'!$A:$C,3,false)-vlookup(R$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(R$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(R$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(R$1,'Imported - Months'!$A:$C,2,false))/(vlookup(R$1,'Imported - Months'!$A:$C,3,false)-vlookup(R$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Aug,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(S$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(S$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(S$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(S$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(S$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(S$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(S$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(S$1,'Imported - Months'!$A:$C,3,false)-vlookup(S$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(S$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(S$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(S$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(S$1,'Imported - Months'!$A:$C,3,false)-vlookup(S$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(S$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(S$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(S$1,'Imported - Months'!$A:$C,2,false))/(vlookup(S$1,'Imported - Months'!$A:$C,3,false)-vlookup(S$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Sep,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(T$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(T$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(T$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(T$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(T$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(T$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(T$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(T$1,'Imported - Months'!$A:$C,3,false)-vlookup(T$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(T$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(T$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(T$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(T$1,'Imported - Months'!$A:$C,3,false)-vlookup(T$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(T$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(T$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(T$1,'Imported - Months'!$A:$C,2,false))/(vlookup(T$1,'Imported - Months'!$A:$C,3,false)-vlookup(T$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Oct,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(U$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(U$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(U$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(U$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(U$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(U$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(U$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(U$1,'Imported - Months'!$A:$C,3,false)-vlookup(U$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(U$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(U$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(U$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(U$1,'Imported - Months'!$A:$C,3,false)-vlookup(U$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(U$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(U$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(U$1,'Imported - Months'!$A:$C,2,false))/(vlookup(U$1,'Imported - Months'!$A:$C,3,false)-vlookup(U$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Nov,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(V$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(V$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(V$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(V$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(V$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(V$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(V$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(V$1,'Imported - Months'!$A:$C,3,false)-vlookup(V$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(V$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(V$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(V$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(V$1,'Imported - Months'!$A:$C,3,false)-vlookup(V$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(V$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(V$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(V$1,'Imported - Months'!$A:$C,2,false))/(vlookup(V$1,'Imported - Months'!$A:$C,3,false)-vlookup(V$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Dec,,,,,,\"=ifna(vlookup($F2,'Imported - Membership Override'!$A:$N,match(W$1,'Imported - Membership Override'!$1:$1,0),false),1)\n*\nif (\n    and(\n        $I2<>\"\"\"\",\n        $I2 < VLOOKUP(W$1,'Imported - Months'!$A:$C,2,false), \n        or(\n           $J2=\"\"\"\", \n           $J2>vlookup(W$1,'Imported - Months'!$A:$C,3,false)\n         )\n       ),1,\n       if ( \n         and (\n             $I2>=vlookup(W$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(W$1,'Imported - Months'!$A:$C,3,false),\n             $J2>=vlookup(W$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(W$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-$I2)/(vlookup(W$1,'Imported - Months'!$A:$C,3,false)-vlookup(W$1,'Imported - Months'!$A:$C,2,false)),\n       if ( \n         and (\n             $I2>=vlookup(W$1,'Imported - Months'!$A:$C,2,false),\n             $I2<= vlookup(W$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         (vlookup(W$1,'Imported - Months'!$A:$C,3,false)-$I2)/(vlookup(W$1,'Imported - Months'!$A:$C,3,false)-vlookup(W$1,'Imported - Months'!$A:$C,2,false)),\n      if ( \n         and (\n             $J2>=vlookup(W$1,'Imported - Months'!$A:$C,2,false),\n             $J2<= vlookup(W$1,'Imported - Months'!$A:$C,3,false)\n         ), \n         ($J2-vlookup(W$1,'Imported - Months'!$A:$C,2,false))/(vlookup(W$1,'Imported - Months'!$A:$C,3,false)-vlookup(W$1,'Imported - Months'!$A:$C,2,false)),\n        0)\n)))\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Jan - Time Off Hours,,,,,,\"=ifna(VLOOKUP($F2,'Imported - Time Off Hours'!$A:$M,month(left(X$1,3)&1)+1,false),0)\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Feb - Time Off Hours,,,,,,\"=ifna(VLOOKUP($F2,'Imported - Time Off Hours'!$A:$M,month(left(Y$1,3)&1)+1,false),0)\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Data,Mar - Time Off Hours,,,,,,\"=ifna(VLOOKUP($F2,'Imported - Time Off Hours'!$A:$M,month(left(Z$1,3)&1)+1,false),0)\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Raw Data,BUSS Member?,,,,,,\"=ifna(if(VLOOKUP(D2,Departments!$A:$B,2,false)=\"\"Yes\"\",\"\"Yes\"\",\"\"No\"\"),\"\"No\"\")\",Lookup,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Raw Data,Offboarded in Current Year?,,,,,,\"=if(J2=\"\"\"\",\"\"No\"\",if(year(J2)=currentYear,\"\"Yes\"\",\"\"No\"\"))\",Computation,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Raw Data,Relevant for Planning?,,,,,,\"=if(AND(A2=\"\"Yes\"\",OR(H2=\"\"Yes\"\",B2=\"\"Yes\"\")),\"\"Yes\"\",\"\"No\"\")\",Computation,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Raw Data,Department,,,,,,\"=IMPORTRANGE(\"\"1frntwzLvFdzyMuNjCdWGySk3EV0kb9wDXMUPQxaGUvU\"\", \"\"View - Master Plan 2025 - OpenAir - All Users!A2:H\"\")\",Import,1frntwzLvFdzyMuNjCdWGySk3EV0kb9wDXMUPQxaGUvU/,Error Fetching Name,View - Master Plan 2025 - OpenAir - All Users\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Imported - Membership Override,User ID,\"=importrange(\"\"https://docs.google.com/spreadsheets/d/1kavhGel7Xi0YJn8xsajQ23pwV5HUs3ZaxytF0gsBUXo\"\", \"\"Data!A1:N5000\"\")\",Import,https://docs.google.com/spreadsheets/d/1kavhGel7Xi0YJn8xsajQ23pwV5HUs3ZaxytF0gsBUXo/,2025 Workforce Membership Overrides,Data,,,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Imported - Months,Month,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1uLQ-1Nzhaksfg2j6kqVTVtAZhJeoQZL_rbJ0VVdtnEY\"\", \"\"Data!A1:L25\"\")\",Import,https://docs.google.com/spreadsheets/d/1uLQ-1Nzhaksfg2j6kqVTVtAZhJeoQZL_rbJ0VVdtnEY/,2025 Months and Holidays,Data,,,,,\n2025 OpenAir - All Users,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,Imported - Time Off Hours,User ID,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1hnUOoC8cUE2Egxwb5JrTM6HWXJVgId_zF8Ejiop-Vmo\"\",\"\"Data!A:M\"\")\",Import,https://docs.google.com/spreadsheets/d/1hnUOoC8cUE2Egxwb5JrTM6HWXJVgId_zF8Ejiop-Vmo/,2025 OpenAir Approved Time Off Request Hours,Data,,,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,Column Name from Raw Data,,,,,,\"=FILTER('Raw Data'!A2:A,'Raw Data'!A2:A <> \"\"TOTAL\"\")\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,Client Name per Quickbooks,,,,,,\"=SUBSTITUTE(A2, \"\"Total \"\",\"\"\"\")\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,Client,,,,,,\"=ifna(VLOOKUP(B2,'Client Name Mapping'!A:B,2,false),B2)\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,January,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!B:B},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,February,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!C:C},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,March,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!D:D},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,April,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!E:E},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,May,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!F:F},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,June,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!G:G},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,July,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!H:H},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,August,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!I:I},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,September,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!J:J},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,October,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!K:K},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,November,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!L:L},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Staging Area Data,December,,,,,,\"=VALUE(substitute(VLOOKUP($A2,{'Raw Data'!$A:$A,'Raw Data'!M:M},2,false),\"\"-\"\",0))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,Client,,,,,,\"=sort(unique(FILTER('Staging Area Data'!C2:C,'Staging Area Data'!C2:C<>\"\"\"\")))\",Lookup,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,January,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!D:D)\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,February,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!E:E)\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,March,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!F:F)\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,April,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!G:G)\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,May,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!H:H)\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,June,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!I:I)\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,July,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!J:J)\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,August,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!K:K)\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,September,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!L:L)\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,October,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!M:M)\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,November,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!N:N)\",Computation,,,\n2025 QuickBooks Sales Data,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,Data,December,,,,,,\"=SUMIF('Staging Area Data'!$C:$C,$A2,'Staging Area Data'!O:O)\",Computation,,,\n2025 Months and Holidays,https://docs.google.com/spreadsheets/d/1uLQ-1Nzhaksfg2j6kqVTVtAZhJeoQZL_rbJ0VVdtnEY/,Data,US,,,,,,\"=NETWORKDAYS($B2,$C2,Holidays!A$2:A$16)*8\",Computation,,,\n2025 Months and Holidays,https://docs.google.com/spreadsheets/d/1uLQ-1Nzhaksfg2j6kqVTVtAZhJeoQZL_rbJ0VVdtnEY/,Data,BR,,,,,,\"=NETWORKDAYS($B2,$C2,Holidays!B$2:B$16)*8\",Computation,,,\n2025 Months and Holidays,https://docs.google.com/spreadsheets/d/1uLQ-1Nzhaksfg2j6kqVTVtAZhJeoQZL_rbJ0VVdtnEY/,Data,IN,,,,,,\"=NETWORKDAYS($B2,$C2,Holidays!C$2:C$16)*8\",Computation,,,\n2025 Months and Holidays,https://docs.google.com/spreadsheets/d/1uLQ-1Nzhaksfg2j6kqVTVtAZhJeoQZL_rbJ0VVdtnEY/,Data,Number of WeekDay Hours (ignoring holidays),,,,,,\"=8*NETWORKDAYS(B2,C2)\",Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Imported - Actual Revenue from QuickBooks,Client,\"=importrange(\"\"https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI\"\", \"\"Data!A:M\"\")\",Import,https://docs.google.com/spreadsheets/d/1NC8L2Jso-w6JJdZO-kVKvFy5pAp-9KFppCf37s4gQgI/,2025 QuickBooks Sales Data,Data,,,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Imported - Actual Revenue from QuickBooks,Client covered in Master Plan?,,,,,,\"=if(ifna(VLOOKUP(A2,'Project Metrics'!B:B,1,false),\"\"No\"\")=\"\"No\"\",\"\"No\"\",\"\"Yes\"\")\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,January,,,,,,='BUSS Metrics'!I95,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,February,,,,,,='BUSS Metrics'!J95,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,March,,,,,,='BUSS Metrics'!K95,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,April,,,,,,='BUSS Metrics'!L95,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,May,,,,,,='BUSS Metrics'!M95,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,June,,,,,,='BUSS Metrics'!N95,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,July,,,,,,='BUSS Metrics'!O95,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,August,,,,,,='BUSS Metrics'!P95,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,September,,,,,,='BUSS Metrics'!Q95,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,October,,,,,,='BUSS Metrics'!R96,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,November,,,,,,='BUSS Metrics'!S96,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Charts,December,,,,,,='BUSS Metrics'!T96,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,BUSS Metrics,BU,,,,,,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk\"\",\"\"'BUSS Metrics'!A2:T110\"\")\",Import,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Computations - 2025 Master Planner,BUSS Metrics\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Project Metrics,Sales Stage,,,,,,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk\"\",\"\"'Project Metrics'!A2:AB\"\")\",Import,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Computations - 2025 Master Planner,Project Metrics\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projected Allocation,Department,,,,,,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk\"\",\"\"'Projected Allocation'!A2:AP\"\")\",Import,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Computations - 2025 Master Planner,Projected Allocation\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projects - Projected vs Actual - Detail View,Project,,,,,,\"={\nquery( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '01-Jan',sum(Col\"\" & match(\"\"REV - Jan\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - Jan\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '01-Jan' '', sum(Col\"\"& match(\"\"REV - Jan\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - Jan\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n;query( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '02-Feb',sum(Col\"\" & match(\"\"REV - Feb\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - Feb\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '02-Feb' '', sum(Col\"\"& match(\"\"REV - Feb\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - Feb\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n;query( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '03-Mar',sum(Col\"\" & match(\"\"REV - Mar\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - Mar\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '03-Mar' '', sum(Col\"\"& match(\"\"REV - Mar\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - Mar\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n;query( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '04-Apr',sum(Col\"\" & match(\"\"REV - Apr\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - Apr\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '04-Apr' '', sum(Col\"\"& match(\"\"REV - Apr\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - Apr\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n;query( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '05-May',sum(Col\"\" & match(\"\"REV - May\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - May\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '05-May' '', sum(Col\"\"& match(\"\"REV - May\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - May\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n;query( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '06-Jun',sum(Col\"\" & match(\"\"REV - Jun\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - Jun\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '06-Jun' '', sum(Col\"\"& match(\"\"REV - Jun\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - Jun\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n;query( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '07-Jul',sum(Col\"\" & match(\"\"REV - Jul\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - Jul\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '07-Jul' '', sum(Col\"\"& match(\"\"REV - Jul\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - Jul\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n;query( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '08-Aug',sum(Col\"\" & match(\"\"REV - Aug\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - Aug\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '08-Aug' '', sum(Col\"\"& match(\"\"REV - Aug\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - Aug\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n;query( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '09-Sep',sum(Col\"\" & match(\"\"REV - Sep\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - Sep\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '09-Sep' '', sum(Col\"\"& match(\"\"REV - Sep\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - Sep\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n;query( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '10-Oct',sum(Col\"\" & match(\"\"REV - Oct\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - Oct\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '10-Oct' '', sum(Col\"\"& match(\"\"REV - Oct\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - Oct\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n;query( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '11-Nov',sum(Col\"\" & match(\"\"REV - Nov\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - Nov\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '11-Nov' '', sum(Col\"\"& match(\"\"REV - Nov\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - Nov\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n;query( \n{'Project Metrics'!A2:AB},\n\"\"select Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) &\"\", '12-Dec',sum(Col\"\" & match(\"\"REV - Dec\"\",'Project Metrics'!A1:AB1,0) & \"\"), sum(Col\"\"& match(\"\"COGS - Dec\"\",'Project Metrics'!A1:AB1,0) & \"\") where Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" <>'' group by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" order by Col\"\"& match(\"\"Project\"\",'Project Metrics'!A1:AB1,0) & \"\" label '12-Dec' '', sum(Col\"\"& match(\"\"REV - Dec\"\",'Project Metrics'!A1:AB1,0) &\"\") '',  sum(Col\"\"& match(\"\"COGS - Dec\"\",'Project Metrics'!A1:AB1,0) &\"\") ''\"\", 0)\n}\n\n\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projects - Projected vs Actual - Detail View,Projected Gross Profit,,,,,,=C2-D2,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projects - Projected vs Actual - Detail View,Month Raw,,,,,,\"=REGEXEXTRACT(B2,\"\".*-(.*)\"\")\",Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projects - Projected vs Actual - Detail View,Actual Revenue,,,,,,\"=sumifs('Imported - Invoices-Costs OpenAir'!C:C,'Imported - Invoices-Costs OpenAir'!B:B,A:A,'Imported - Invoices-Costs OpenAir'!E:E,F:F)\",Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projects - Projected vs Actual - Detail View,Actual COGS,,,,,,\"=sumifs('Imported - Invoices-Costs OpenAir'!D:D,'Imported - Invoices-Costs OpenAir'!B:B,A:A,'Imported - Invoices-Costs OpenAir'!E:E,F:F)\",Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projects - Projected vs Actual - Detail View,Actual Gross Profit,,,,,,=G2-H2,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projects - Projected vs Actual - Detail View,COGS Difference (+ value is GOOD),,,,,,=D2-H2,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projects - Projected vs Actual - Detail View,\"Revenue Difference\n (+ value is GOOD)\",,,,,,=G2-C2,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projects - Projected vs Actual - Detail View,\"Gross Profit Difference\n(+ value is GOOD)\",,,,,,=I2-E2,Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projects - Projected vs Actual - Detail View,Client,,,,,,\"=VLOOKUP(A2,{'Project Metrics'!C:C,'Project Metrics'!B:B} ,2,false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Projects - Projected vs Actual - Detail View,Business Unit,,,,,,\"=VLOOKUP(A2,{'Project Metrics'!C:D} ,2,false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Department - Metric,\"=CONCATENATE($B1,\"\" - \"\",$C1)\",Computation,,,,\"=CONCATENATE($B2,\"\" - \"\",$C2)\",Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Jan,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(J$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Feb,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(K$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Mar,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(L$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Apr,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(M$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,May,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(N$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Jun,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(O$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Jul,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(P$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Aug,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(Q$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Sep,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(R$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Oct,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(S$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Nov,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(T$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Practice Level Metrics,Dec,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(U$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Imported - Invoices-Costs OpenAir,\ufeffDate,\"=importrange(\"\"https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/edit#gid=0\"\", \"\"'Imported - Invoices-Costs for BU OpenAir'!B1:E5000\"\")\",Import,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/edit#gid=0/,Computations - 2025 Master Planner,Imported - Invoices-Costs for BU OpenAir,,,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Imported - Invoices-Costs OpenAir,Month,,,,,,\"=if (A2=\"\"\"\",\"\"\"\",TEXT(A2,\"\"mmm\"\"))\",Computation,,,\n2025 - Master Plan - Reports,https://docs.google.com/spreadsheets/d/1rjBV39LE4OnJ-ZXePz7YkKMV9Rmlr49nsIJlJO5Hzhs/,Imported - Invoices-Costs OpenAir,Is the Project listed in Forecast?,,,,,,\"=if(ifna(VLOOKUP(B2,'Project Metrics'!C:C,1,false),\"\"Missing\"\")=\"\"Missing\"\",\"\"Missing\"\",\"\"\"\")\",Lookup,,,\n2025 - Master Plan - Forecast,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,To be deleted - Data,\"Target Rate for Role\n\nNote: Rate is $0 if client is OE.\",,,,,,\"=if(C2=\"\"Object Edge\"\",0, if(IfError(Find(\"\"Bench\"\",D2)),0,if(T2=\"\"\"\",IFNA(vlookup($F2,'Reference - Rate Card'!$A:$B,2,false), IFNA(vlookup($AA2,'Reference - Rate Card'!$A:$B,2,false), \"\"\"\")),T2)))\",Lookup,,,\n2025 - Master Plan - Forecast,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,To be deleted - Data,\"Total hours for the role for Revenue Computation\n\n\",,,,,,=sum(H2:S2),Computation,,,\n2025 - Master Plan - Forecast,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,To be deleted - Data,targetRevenue,,,,,,=W2*X2,Computation,,,\n2025 - Master Plan - Forecast,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,To be deleted - Data,Department - default for the person,,,,,,\"=ifna(vlookup(G2,{'Imported - OpenAir All Users'!F:F,'Imported - OpenAir All Users'!D:D},2,false),E2)\",Lookup,,,\n2025 - Master Plan - Forecast,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,Months,Month,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1uLQ-1Nzhaksfg2j6kqVTVtAZhJeoQZL_rbJ0VVdtnEY\"\", \"\"Data!A1:l25\"\")\",Import,https://docs.google.com/spreadsheets/d/1uLQ-1Nzhaksfg2j6kqVTVtAZhJeoQZL_rbJ0VVdtnEY/,2025 Months and Holidays,Data,,,,,\n2025 - Master Plan - Forecast,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,Imported - Scheduled Exceptions-Only PTO,User - User ID,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1bWzhP0wf2Rmhuq7Ef8TxcqM5u9OmWH37NFvN-7yVbnE/edit?gid=0#gid=0\"\",\"\"'PTO'!A1:M1000\"\")\",Import,https://docs.google.com/spreadsheets/d/1bWzhP0wf2Rmhuq7Ef8TxcqM5u9OmWH37NFvN-7yVbnE/edit?gid=0#gid=0/,Error Fetching Name,PTO,,,,,\n2025 - Master Plan - Forecast,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,Foreast with Computations,Stage,,,,,,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k\"\",\"\"Forecast!A2:AH\"\")\",Import,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,2025 - Master Plan - Forecast,Forecast\n2025 - Master Plan - Forecast,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,Imported - OpenAir All Users,BUSS Member?,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk\"\",\"\"'Data'!A1:AU1000\"\")\",Import,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,2025 OpenAir - All Users,Data,,,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Annual,,,,,,=sum(D2:G2),Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Q1,,,,,,=sum(I2:K2),Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Q2,,,,,,=sum(L2:N2),Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Q3,,,,,,=sum(O2:Q2),Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Q4,,,,,,=sum(R2:T2),Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Metric,,,,,,\"=CONCATENATE($A2,\"\" - \"\",$B2)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Jan,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AD:AD,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Feb,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AE:AE,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Mar,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AF:AF,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Apr,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AG:AG,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,May,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AH:AH,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Jun,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AI:AI,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Jul,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AJ:AJ,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Aug,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AK:AK,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Sep,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AL:AL,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Oct,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AM:AM,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Nov,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AN:AN,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,BUSS Metrics,Dec,,,,,,\"=ARRAYFORMULA(SUMPRODUCT(if ('Revenue and Margin Computations'!$E:$E= $A2,1,0), 'Revenue and Margin Computations'!AO:AO,'Revenue and Margin Computations'!$BF:$BF))\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Imported - Invoices-Costs for BU OpenAir,Business Unit,\"=importrange(\"\"https://docs.google.com/spreadsheets/d/1L8UujKQ-6eZmnmoqFIPKARVjQMDIQGrMinR4hwpB1js\"\", \"\"Data - Invoices!A1:D5000\"\")\",Import,https://docs.google.com/spreadsheets/d/1L8UujKQ-6eZmnmoqFIPKARVjQMDIQGrMinR4hwpB1js/,2025 OpenAir  - Client Projects Hours and Invoices,Data - Invoices,,,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Imported - Invoices-Costs for BU OpenAir,Cost,,,,,,\"=sumifs('Actuals - Project Hours and Costs'!I:I,'Actuals - Project Hours and Costs'!C:C,C:C,'Actuals - Project Hours and Costs'!F:F, F:F)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Imported - Invoices-Costs for BU OpenAir,Month,,,,,,\"=text(B2,\"\"MMM\"\")\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals - Project Hours and Costs,Business Unit,\"=importrange(\"\"https://docs.google.com/spreadsheets/d/1L8UujKQ-6eZmnmoqFIPKARVjQMDIQGrMinR4hwpB1js\"\", \"\"Data - Project Hours!A1:E5000\"\")\",Import,https://docs.google.com/spreadsheets/d/1L8UujKQ-6eZmnmoqFIPKARVjQMDIQGrMinR4hwpB1js/,2025 OpenAir  - Client Projects Hours and Invoices,Data - Project Hours,,,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals - Project Hours and Costs,Month,,,,,,\"=text(B2,\"\"MMM\"\")\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals - Project Hours and Costs,Job Code,,,,,,\"=VLOOKUP(D2,{'Imported - OpenAir All Users Relevant for Planning'!F:F,'Imported - OpenAir All Users Relevant for Planning'!E:E},2,false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals - Project Hours and Costs,\"Average loaded cost per hour for the job code or the person\n\nSet to ZERO if job-code is SGA; else data picked from tab 'Reference - COGS Rate Card'\",,,,,,\"=ifna(if(G2 =\"\"Individual Contributor - SGA\"\",0,ifna(vlookup($D2,'Reference - COGS Card'!$A:$C,3,false),ifna(vlookup($G2,'Reference - COGS Card'!$B:$C,2,false),\"\"\"\"))),0)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals - Project Hours and Costs,Cost,,,,,,=E2*H2,Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Months,Month,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1uLQ-1Nzhaksfg2j6kqVTVtAZhJeoQZL_rbJ0VVdtnEY\"\", \"\"Data!A1:L25\"\")\",Import,https://docs.google.com/spreadsheets/d/1uLQ-1Nzhaksfg2j6kqVTVtAZhJeoQZL_rbJ0VVdtnEY/,2025 Months and Holidays,Data,,,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,BU,,,,,,\"={\n\niferror(query( {'Imported - Offboarded in Current Year'!A2:E},\"\"select Col\"\" & match(\"\"BU\"\",'Imported - Offboarded in Current Year'!A1:E1,0) & \"\", Col\"\"& match(\"\"Job code\"\",'Imported - Offboarded in Current Year'!A1:E1,0) & \"\", Col\"\"& match(\"\"User ID\"\",'Imported - Offboarded in Current Year'!A1:E1,0)& \"\", Col\"\"& match(\"\"Status\"\",'Imported - Offboarded in Current Year'!A1:E1,0) & \"\" where Col\"\"& match(\"\"User ID\"\",'Imported - Offboarded in Current Year'!A1:E1,0)& \"\" <>''\"\",0),{\"\"\"\",\"\"\"\",\"\"\"\",\"\"\"\"});\n\niferror(query( {'Imported - Active BUSS Members'!A2:E},\"\"select Col\"\" & match(\"\"BU\"\",'Imported - Active BUSS Members'!A1:E1,0) & \"\", Col\"\"& match(\"\"Job code\"\",'Imported - Active BUSS Members'!A1:E1,0) & \"\", Col\"\"& match(\"\"User ID\"\",'Imported - Active BUSS Members'!A1:E1,0)& \"\", Col\"\"& match(\"\"Status\"\",'Imported - Active BUSS Members'!A1:E1,0) & \"\" where Col\"\"& match(\"\"User ID\"\",'Imported - Active BUSS Members'!A1:E1,0)& \"\" <>''\"\",0),{\"\"\"\",\"\"\"\",\"\"\"\",\"\"\"\"});\n\nunique(iferror(\nquery( {'Revenue and Margin Computations'!E2:AC},\"\"select Col\"\" & match(\"\"BU - default for the person\"\",'Revenue and Margin Computations'!E1:AC1,0) & \"\", Col\"\"& match(\"\"Job code - default for the person\"\",'Revenue and Margin Computations'!E1:AC1,0) & \"\", Col\"\"& match(\"\"User ID\"\",'Revenue and Margin Computations'!E1:AC1,0)& \"\", Col\"\"& match(\"\"Status\"\",'Revenue and Margin Computations'!E1:AC1,0) & \"\" where Col\"\" & match(\"\"Existing User\"\",'Revenue and Margin Computations'!E1:AC1,0) & \"\" ='No' AND  Col\"\" & match(\"\"User ID\"\",'Revenue and Margin Computations'!E1:AC1,0) & \"\" <>''\"\",0),{\"\"\"\",\"\"\"\",\"\"\"\",\"\"\"\"}\n\n))\n\n}\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Is the person appearing more than once here?,,,,,,\"=if(C2=\"\"\"\",FALSE,countif(C:C,C2)>1)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,\"Is this a person who will be released when there is no revenue from the client?\n\n\",,,,,,\"=if(D2=\"\"Contractor\"\",\"\"Yes\"\",\"\"No\"\")\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Jan,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!H:H)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Feb,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!I:I)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Mar,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!J:J)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Apr,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!K:K)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,May,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!L:L)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Jun,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!M:M)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Jul,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!N:N)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Aug,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!O:O)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Sep,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!P:P)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Oct,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!Q:Q)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Nov,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!R:R)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Dec,,,,,,\"=sumif('Revenue and Margin Computations'!$G:$G,$C2,'Revenue and Margin Computations'!S:S)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Over Allocation Hours - Jan,,,,,,\"=if($D2=\"\"Contractor\"\",0,if (VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AJ:AJ},2,false) < G2, G2 - VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AJ:AJ},2,false),0))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Over Allocation Hours - Feb,,,,,,\"=if($D2=\"\"Contractor\"\",0,if (VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AK:AK},2,false) < H2, H2 - VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AK:AK},2,false),0))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Over Allocation Hours - Mar,,,,,,\"=if($D2=\"\"Contractor\"\",0,if (VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AL:AL},2,false) < I2, I2 - VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AL:AL},2,false),0))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Over Allocation Hours - Apr,,,,,,\"=if($D2=\"\"Contractor\"\",0,if (VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AM:AM},2,false) < J2, J2 - VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AM:AM},2,false),0))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Over Allocation Hours - May,,,,,,\"=if($D2=\"\"Contractor\"\",0,if (VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AN:AN},2,false) < K2, K2 - VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AN:AN},2,false),0))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Over Allocation Hours - Jun,,,,,,\"=if($D2=\"\"Contractor\"\",0,if (VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AO:AO},2,false) < L2, L2 - VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AO:AO},2,false),0))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Over Allocation Hours - Jul,,,,,,\"=if($D2=\"\"Contractor\"\",0,if (VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AP:AP},2,false) < M2, M2 - VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AP:AP},2,false),0))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Projected Allocation,Over Allocation Hours - Aug,,,,,,\"=if($D2=\"\"Contractor\"\",0,if (VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AQ:AQ},2,false) < N2, N2 - VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AQ:AQ},2,false),0))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Imported - OpenAir All Users Relevant for Planning,BUSS Member?,,,,,,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk\"\",\"\"Data!A2:AU1000\"\")\",Import,https://docs.google.com/spreadsheets/d/1yDvfjjMgH26c4eVptDt4DQUzSnU2GeO-ojuN-irZnUk/,2025 OpenAir - All Users,Data\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,f,,,,,,\"=FILTER('Imported - OpenAir All Users Relevant for Planning'!D:G,'Imported - OpenAir All Users Relevant for Planning'!C:C=\"\"Yes\"\")\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Jan - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AJ:AJ},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(E$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Feb - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AK:AK},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(F$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Mar - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AL:AL},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(G$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Apr - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AM:AM},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(H$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,May - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AN:AN},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(I$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Jun - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AO:AO},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(J$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Jul - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AP:AP},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(K$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Aug - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AQ:AQ},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(L$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Sep - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AR:AR},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(M$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Oct - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AS:AS},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(N$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Nov - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AT:AT},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(O$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Dec - Non-billable Hours,,,,,,\"=if ($D2=\"\"Contractor\"\",0,VLOOKUP($C2,{'Imported - OpenAir All Users Relevant for Planning'!$F:$F,'Imported - OpenAir All Users Relevant for Planning'!AU:AU},2,false)-sumifs('Imported - Actual Billable Hours'!$C:$C,'Imported - Actual Billable Hours'!$B:$B,$C2,'Imported - Actual Billable Hours'!$D:$D,left(P$1,3)))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,\"Average loaded cost per hour for the job code or the person\n\nSet to ZERO if job-code is SGA; else data picked from tab 'Reference - COGS Rate Card'\",,,,,,\"=if(B2=\"\"Individual Contributor - SGA\"\",0,ifna(vlookup($C2,'Reference - COGS Card'!$A:$C,3,false),ifna(vlookup($B2,'Reference - COGS Card'!$B:$C,2,false),\"\"\"\")))\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Jan - COGS on Non-billable Hours,,,,,,=E2*$Q2,Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Feb - COGS on Non-billable Hours,,,,,,=F2*$Q2,Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Mar - COGS on Non-billable Hours,,,,,,=G2*$Q2,Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Apr - COGS on Non-billable Hours,,,,,,=H2*$Q2,Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,May - COGS on Non-billable Hours,,,,,,=I2*$Q2,Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Jun - COGS on Non-billable Hours,,,,,,=J2*$Q2,Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Jul - COGS on Non-billable Hours,,,,,,=K2*$Q2,Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Aug - COGS on Non-billable Hours,,,,,,=L2*$Q2,Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Actuals on Non-Billable Work,Sep - COGS on Non-billable Hours,,,,,,=M2*$Q2,Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Over Allocations - Project View,Project,,,,,,=unique('Revenue and Margin Computations'!D2:S),Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Over Allocations - Project View,Over Allocation Hours - Jan,,,,,,\"=if(E2>0, ifna(unique({\nfilter('Projected Allocation'!S:S,'Projected Allocation'!$C:$C=$D2,'Projected Allocation'!S:S>0)\n\n}),\"\"\"\"),\"\"\"\")\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Over Allocations - Project View,Over Allocation Hours - Feb,,,,,,\"=if(F2>0, ifna(unique({\nfilter('Projected Allocation'!T:T,'Projected Allocation'!$C:$C=$D2,'Projected Allocation'!T:T>0)\n\n}),\"\"\"\"),\"\"\"\")\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Over Allocations - Project View,Over Allocation Hours - Mar,,,,,,\"=if(G2>0, ifna(unique({\nfilter('Projected Allocation'!U:U,'Projected Allocation'!$C:$C=$D2,'Projected Allocation'!U:U>0)\n\n}),\"\"\"\"),\"\"\"\")\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Over Allocations - Project View,Over Allocation Hours - Apr,,,,,,\"=if(H2>0, ifna(unique({\nfilter('Projected Allocation'!V:V,'Projected Allocation'!$C:$C=$D2,'Projected Allocation'!V:V>0)\n\n}),\"\"\"\"),\"\"\"\")\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Over Allocations - Project View,Over Allocation Hours - May,,,,,,\"=if(I2>0, ifna(unique({\nfilter('Projected Allocation'!W:W,'Projected Allocation'!$C:$C=$D2,'Projected Allocation'!W:W>0)\n\n}),\"\"\"\"),\"\"\"\")\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Over Allocations - Project View,Over Allocation Hours - Jun,,,,,,\"=if(J2>0, ifna(unique({\nfilter('Projected Allocation'!X:X,'Projected Allocation'!$C:$C=$D2,'Projected Allocation'!X:X>0)\n\n}),\"\"\"\"),\"\"\"\")\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Over Allocations - Project View,Over Allocation Hours - Jul,,,,,,\"=if(K2>0, ifna(unique({\nfilter('Projected Allocation'!Y:Y,'Projected Allocation'!$C:$C=$D2,'Projected Allocation'!Y:Y>0)\n\n}),\"\"\"\"),\"\"\"\")\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Over Allocations - Project View,Over Allocation Hours - Aug,,,,,,\"=if(L2>0, ifna(unique({\nfilter('Projected Allocation'!Z:Z,'Projected Allocation'!$C:$C=$D2,'Projected Allocation'!Z:Z>0)\n\n}),\"\"\"\"),\"\"\"\")\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Over Allocations - Project View,Over Allocation Hours - Sep,,,,,,\"=if(M2>0, ifna(unique({\nfilter('Projected Allocation'!AA:AA,'Projected Allocation'!$C:$C=$D2,'Projected Allocation'!AA:AA>0)\n\n}),\"\"\"\"),\"\"\"\")\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Over Allocations - Project View,Over Allocation Hours - Oct,,,,,,\"=if(N2>0, ifna(unique({\nfilter('Projected Allocation'!AB:AB,'Projected Allocation'!$C:$C=$D2,'Projected Allocation'!AB:AB>0)\n\n}),\"\"\"\"),\"\"\"\")\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Revenue and Margin Computations,Sales Stage,,,,,,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k\"\",\"\"Foreast with Computations!A2:G\"\")\",Import,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,2025 - Master Plan - Forecast,Foreast with Computations\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Revenue and Margin Computations,Hours - Jan,,,,,,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k\"\",\"\"Foreast with Computations!AO2:AZ\"\")\",Import,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,2025 - Master Plan - Forecast,Foreast with Computations\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Revenue and Margin Computations,Known Rate for Role,,,,,,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k\"\",\"\"Foreast with Computations!AF2:AM\"\")\",Import,https://docs.google.com/spreadsheets/d/1TuKiMVPRGrg2PXrR7pB6dzzqJHUJpNeR9rIHgfBe-5k/,2025 - Master Plan - Forecast,Foreast with Computations\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Imported - Actual Billable Hours,Date,,,,,,\"=IMPORTRANGE(\"\"https://docs.google.com/spreadsheets/d/1L8UujKQ-6eZmnmoqFIPKARVjQMDIQGrMinR4hwpB1js\"\",\"\"'Data - Hours'!A2:C\"\")\",Import,https://docs.google.com/spreadsheets/d/1L8UujKQ-6eZmnmoqFIPKARVjQMDIQGrMinR4hwpB1js/,2025 OpenAir  - Client Projects Hours and Invoices,Data - Hours\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Imported - Actual Billable Hours,Month,,,,,,\"=text(A2,\"\"MMM\"\")\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Department - Metric,\"=CONCATENATE($B1,\"\" - \"\",$C1)\",Computation,,,,\"=CONCATENATE($B2,\"\" - \"\",$C2)\",Computation,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Jan,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(J$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Feb,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(K$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Mar,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(L$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Apr,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(M$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,May,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(N$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Jun,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(O$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Jul,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(P$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Aug,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(Q$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Sep,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(R$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Oct,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(S$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Nov,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(T$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Practice Level Metrics,Dec,,,,,,\"=VLOOKUP($B2,'Workforce Membership across Months'!$A:$M,match(U$1,'Workforce Membership across Months'!$1:$1,0),false)\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Imported - Active BUSS Members,BU,,,,,,\"={iferror(query({'Imported - OpenAir All Users Relevant for Planning'!A:H},\"\"select Col4, Col5, Col6, Col7 where Col8='Yes' and Col1='Yes'\"\"),{\"\"\"\",\"\"\"\",\"\"\"\",\"\"\"\"})}\",Lookup,,,\nComputations - 2025 Master Planner,https://docs.google.com/spreadsheets/d/1PsIBF5Bc3zSLit4PgkyQ_wHZe0k7Vl44UtpOl3FqFrk/,Imported - Offboarded in Current Year,BU,\"={iferror(query({'Imported - OpenAir All Users Relevant for Planning'!A1:J},\"\"select Col4, Col5, Col6, Col7, Col10 where Col2 ='Yes' and Col8 = 'No' \"\"),{\"\"\"\",\"\"\"\",\"\"\"\",\"\"\"\",\"\"\"\",\"\"\"\"})}\",Lookup,,,,,,,,\n";
+
+            var container = document.getElementById('graph-container');
+            var data = {
+                nodes: nodes,
+                edges: edges
+            };
+            var options = {
+                interaction: {
+                    hover: true,
+                    tooltipDelay: 200,
+                    dragNodes: true,
+                    dragView: true,
+                    zoomView: true
+                },
+                nodes: {
+                    borderWidth: 1,
+                    margin: 10,
+                    shadow: true,
+                    title: undefined // We are using our custom HTML tooltips
+                },
+                edges: {
+                    width: 2,
+                    highlight: '#1E90FF',
+                    hover: '#1E90FF',
+                    smooth: {
+                        enabled: true,
+                        type: 'continuous',
+                        roundness: 0.3
+                    }
+                },
+                physics: {
+                    enabled: true,
+                    solver: 'barnesHut',
+                    barnesHut: {
+                        gravitationalConstant: -15000,
+                        centralGravity: 0.2,
+                        springLength: 200,
+                        springConstant: 0.05,
+                        damping: 0.1
+                    },
+                    stabilization: {
+                        iterations: 1000,
+                        fit: true
+                    }
+                }
+            };
+
+            var network = new vis.Network(container, data, options);
+            
+            var tooltip = document.querySelector('.vis-tooltip');
+            
+            network.on("hoverNode", function (params) {
+                var nodeId = params.node;
+                var nodeData = nodes.get(nodeId);
+                
+                if (nodeData.tooltipHTML) {
+                    tooltip.innerHTML = nodeData.tooltipHTML;
+                    tooltip.style.left = params.event.x + 15 + 'px';
+                    tooltip.style.top = params.event.y - 10 + 'px';
+                    tooltip.style.visibility = 'visible';
+                }
+            });
+            
+            network.on("blurNode", function (params) {
+                tooltip.style.visibility = 'hidden';
+            });
+
+            network.on("dragStart", function (params) {
+                if (params.nodes.length > 0) {
+                    tooltip.style.visibility = 'hidden';
+                }
+            });
+            
+            network.on("zoom", function (params) {
+                 tooltip.style.visibility = 'hidden';
+            });
+
+            network.on("click", function (params) {
+                if (params.nodes.length > 0) {
+                    var nodeId = params.nodes[0];
+                    var nodeData = nodes.get(nodeId);
+                    
+                    if (nodeData.url) {
+                        window.open(nodeData.url, '_blank');
+                    }
+                }
+            });
+            
+            network.on("stabilizationIterationsDone", function () {
+                network.setOptions( { physics: false } );
+            });
+            
+            // --- Event Listeners for Buttons ---
+            
+            document.getElementById('toggle-help').onclick = function() {
+                var helpBox = document.getElementById('help-box');
+                if (helpBox.style.display === 'none') {
+                    helpBox.style.display = 'block';
+                    this.textContent = '[ Hide Help ]';
+                } else {
+                    helpBox.style.display = 'none';
+                    this.textContent = '[ Show Help ]';
+                }
+            };
+            
+            document.getElementById('zoom-in').onclick = function() {
+                var currentScale = network.getScale();
+                var newScale = currentScale * 1.2;
+                network.moveTo({ scale: newScale });
+            };
+            
+            document.getElementById('zoom-out').onclick = function() {
+                var currentScale = network.getScale();
+                var newScale = currentScale / 1.2;
+                network.moveTo({ scale: newScale });
+            };
+
+            document.getElementById('download-csv').onclick = function() {
+                try {
+                    var csvData = csvDataToEmbed;
+                    
+                    if (!csvData) {
+                        alert("No CSV data is embedded in this file.");
+                        return;
+                    }
+
+                    var blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+                    var link = document.createElement("a");
+                    var url = URL.createObjectURL(blob);
+                    
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", "spreadsheet_report.csv");
+                    link.style.visibility = 'hidden';
+                    
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url); // Clean up
+                } catch (e) {
+                    console.error("Error creating download:", e);
+                    alert("An error occurred while preparing the download.");
+                }
+            };
+        }
+    </script>
+</body>
+</html>
+    
